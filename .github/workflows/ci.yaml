@@ -17,34 +17,34 @@ jobs:
           MYSQL_DATABASE: ctrlline
           MYSQL_USER: ctrlline
           MYSQL_PASSWORD: ctrlline
-        ports:
-          - 3306:3306
+        # 내부 네트워크에서만 접근하므로 포트 매핑 생략
         options: >-
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
 
       redis:
         image: redis:7
-        ports:
-          - 6379:6379
         options: >-
           --health-cmd="redis-cli ping"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
 
     steps:
+      # 1️⃣ 레포 체크아웃
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 2️⃣ JDK 설정
       - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 21
 
+      # 3️⃣ Gradle 캐시
       - name: Cache Gradle packages
         uses: actions/cache@v3
         with:
@@ -55,17 +55,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      # 4️⃣ Gradlew 실행 권한
       - name: Grant execute permission for Gradlew
         run: chmod +x CtrlLine/gradlew
 
+      # 5️⃣ DB 준비 대기
+      - name: Wait for MariaDB & Redis
+        run: |
+          echo "Waiting 15 seconds for MariaDB and Redis to initialize..."
+          sleep 15
+
+      # 6️⃣ Build & Test
       - name: Build & run tests
         working-directory: CtrlLine
         run: ./gradlew clean build test --stacktrace
 
+      # 7️⃣ SonarQube Scan
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
         with:
           projectBaseDir: .
           hostUrl: ${{ secrets.SONAR_HOST_URL }}
-          # token만 secret으로 관리
           token: ${{ secrets.SONAR_TOKEN }}
