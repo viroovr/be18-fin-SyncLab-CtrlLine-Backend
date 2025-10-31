@@ -45,7 +45,7 @@ jobs:
       REFRESH_TOKEN_EXPIRED: 86400000
       REFRESH_TOKEN_SECRET: myRefreshSecretcessSecretcessSecretcessSecret
       CORS_ALLOWED_ORIGINS: https://my-frontend.com
-      SONAR_HOST_URL: https://intermomentary-cherrie-uncreditably.ngrok-free.dev/sonarqube
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       
     steps:
@@ -76,20 +76,27 @@ jobs:
         run: chmod +x CtrlLine/gradlew
 
       # 5️⃣ DB 준비 대기
-      - name: Wait for MariaDB & Redis
+      - name: Wait for MariaDB ready
         run: |
-          echo "Waiting 15 seconds for MariaDB and Redis to initialize..."
-          sleep 15
+          echo "Waiting for MariaDB to be ready..."
+          for i in {1..30}; do
+            if docker exec $(docker ps -q -f name=mariadb) mysqladmin ping -h "mariadb" --silent; then
+              echo "MariaDB is ready!"
+              break
+            fi
+            echo "Waiting..."
+            sleep 3
+          done
 
       # 6️⃣ Build & Test
       - name: Build & run tests
         working-directory: CtrlLine
-        run: ./gradlew clean build test --stacktrace -Dspring.profiles.active=prod
+        run: ./gradlew clean build test --stacktrace -i -Dspring.profiles.active=prod
 
       # 7️⃣ SonarQube Scan
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
         with:
-          projectBaseDir: .
+          projectBaseDir: CtrlLine
           hostUrl: ${{ secrets.SONAR_HOST_URL }}
           token: ${{ secrets.SONAR_TOKEN }}
